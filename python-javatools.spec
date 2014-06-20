@@ -1,6 +1,6 @@
 Summary: Tools for inspecting and comparing binary Java class files
 Name: python-javatools
-Version: 1.3
+Version: 1.4.0
 Release: 0
 License: LGPL
 Group: Application/System
@@ -46,33 +46,22 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%doc LICENSE README.md TODO
+%doc ChangeLog LICENSE README.md TODO
 %{python2_sitelib}/*
 %{_bindir}/*
 
 
 %changelog
 
-* Wed Jun 27 2012 Christopher O'Brien <obriencj@gmail.com> - 1.3-0
-- expand on cheetah html reporting
-- requires PyXML for xml.xpath
-- renamed to python-javatools as there was already a javaclass
-- significantly more testing before tagging a release
-- distdiff and distpatchgen now use multiprocessing by default
-- removed distpatchgen and javatools.patchgen
-- added support for checking runtime annotations
+* Thu Jan 21 2014 Christopher O'Brien <obriencj@gmail.com> - 1.4.0-0
+- bump to 1.4.0
+- added ChangeLog as its own file
+
+* Thu May 23 2013 Christopher O'Brien <obriencj@gmail.com> - 1.3-1
+- bump to 1.3
 
 * Thu Jun 14 2012 Christopher O'Brien <obriencj@gmail.com> - 1.2-1
-- require python 2.6 and later rather than trying to fight with
-  library alternatives
-- added classes to compartmentalize distinfo and jarinfo data
-- reworked dependency information into a dep tree rather than a simple
-  list
-- rework options into groups
-- fix for modified-utf8 in class constant pools
-- added multiple output formats for reports (text, json, html)
-- the html output is currently simplified, and will be expanded upon
-  later
+- require python 2.6 and later
 
 * Sun May 6 2012 Christopher O'Brien <obriencj@gmail.com> - 1.1-1
 - dependency features, license files

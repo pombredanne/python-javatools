@@ -59,7 +59,10 @@ CONST_Fieldref = 9
 CONST_Methodref = 10
 CONST_InterfaceMethodref = 11
 CONST_NameAndType = 12
-CONST_ModuleIdInfo = 13
+CONST_ModuleId = 13 # Removed? Maybe OpenJDK only?
+CONST_MethodHandle = 15 # TODO
+CONST_MethodType = 16 # TODO
+CONST_InvokeDynamic = 18 # TODO
 
 
 
@@ -127,7 +130,10 @@ class ClassUnpackException(Exception):
 
 class JavaConstantPool(object):
 
-    """ A constants pool """
+    """ A constants pool
+
+    reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.4
+    """
 
 
     def __init__(self):
@@ -205,12 +211,12 @@ class JavaConstantPool(object):
                  CONST_Long, CONST_Double):
             return v
 
-        elif t in (CONST_Class, CONST_String):
+        elif t in (CONST_Class, CONST_String, CONST_MethodType):
             return self.deref_const(v)
 
         elif t in (CONST_Fieldref, CONST_Methodref,
                    CONST_InterfaceMethodref, CONST_NameAndType,
-                   CONST_ModuleIdInfo):
+                   CONST_ModuleId):
             return tuple(self.deref_const(i) for i in v)
 
         else:
@@ -303,7 +309,7 @@ class JavaConstantPool(object):
             b = "".join(_pretty_typeseq(b))
             result = "%s:%s" % (a,b)
 
-        elif t == CONST_ModuleIdInfo:
+        elif t == CONST_ModuleId:
             a, b = (self.deref_const(i) for i in v)
             result = "%s@%s" % (a,b)
 
@@ -348,7 +354,10 @@ class JavaAttributes(dict):
 
 class JavaClassInfo(object):
 
-    """ Information from a disassembled Java class file. """
+    """ Information from a disassembled Java class file.
+
+    reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html
+    """
 
     def __init__(self):
         self.cpool = JavaConstantPool()
@@ -363,6 +372,7 @@ class JavaClassInfo(object):
         self.fields = tuple()
         self.methods = tuple()
         self.annotations = None
+        self.invisible_annotations = None
 
         self._provides = None
         self._provides_private = None
@@ -466,7 +476,7 @@ class JavaClassInfo(object):
         """
 
         for m in self.get_methods_by_name(name):
-            if ((not m.is_bridge) and
+            if ((not m.is_bridge()) and
                 m.get_arg_type_descriptors() == arg_types):
                 return m
         return None
@@ -491,7 +501,7 @@ class JavaClassInfo(object):
         # conditions.
 
         for m in self.get_methods_by_name(name):
-            if (m.is_bridge and
+            if (m.is_bridge() and
                 m.get_arg_type_descriptors() == arg_types):
                 yield m
 
@@ -584,7 +594,10 @@ class JavaClassInfo(object):
 
     def is_deprecated(self):
 
-        """ is this class deprecated """
+        """ is this class deprecated
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.15
+        """
 
         return bool(self.get_attribute("Deprecated"))
 
@@ -606,15 +619,12 @@ class JavaClassInfo(object):
 
 
 
-    def get_annotations(self):
+    def _get_annotations(self, python_attr_name, java_attr_name):
 
-        """ The RuntimeVisibleAnnotations attribute. A tuple of
-        JavaAnnotaion instances """
-
-        annos = self.annotations
+        annos = getattr(self, python_attr_name)
 
         if annos is None:
-            buff = self.get_attribute("RuntimeVisibleAnnotations")
+            buff = self.get_attribute(java_attr_name)
             if buff is None:
                 annos = tuple()
 
@@ -623,16 +633,45 @@ class JavaClassInfo(object):
                     annos = up.unpack_objects(JavaAnnotation, self.cpool)
                     annos = tuple(annos)
 
-            self.annotations = annos
+            setattr(self, python_attr_name, annos)
 
         return annos
+
+
+
+    def get_annotations(self):
+
+        """ The RuntimeVisibleAnnotations attribute. A tuple of
+        JavaAnnotation instances
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.16
+        """
+
+        return self._get_annotations("annotations",
+                                     "RuntimeVisibleAnnotations")
+
+
+
+    def get_invisible_annotations(self):
+
+        """ The RuntimeInvisibleAnnotations attribute. A tuple of
+        JavaAnnotation instances
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.17
+        """
+
+        return self._get_annotations("invisible_annotations",
+                                     "RuntimeInvisibleAnnotations")
 
 
 
     def get_sourcefile(self):
 
         """ the name of thie file this class was compiled from, or
-        None if not indicated """
+        None if not indicated
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.10
+        """
 
         buff = self.get_attribute("SourceFile")
         if buff is None:
@@ -646,6 +685,11 @@ class JavaClassInfo(object):
 
 
     def get_source_debug_extension(self):
+
+        """
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.11
+        """
+
         buff = self.get_attribute("SourceDebugExtension")
         return (buff and str(buff)) or None
 
@@ -654,7 +698,10 @@ class JavaClassInfo(object):
     def get_innerclasses(self):
 
         """ sequence of JavaInnerClassInfo instances describing the
-        inner classes of this class definition """
+        inner classes of this class definition
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.6
+        """
 
         buff = self.get_attribute("InnerClasses")
         if buff is None:
@@ -667,7 +714,10 @@ class JavaClassInfo(object):
 
     def get_signature(self):
 
-        """ the generics class signature """
+        """ the generics class signature
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.9
+        """
 
         buff = self.get_attribute("Signature")
         if buff is None:
@@ -692,7 +742,10 @@ class JavaClassInfo(object):
 
         """ the class.method or class (if the definition is not from
         within a method) that encloses the definition of this
-        class. Returns None if this was not an inner class. """
+        class. Returns None if this was not an inner class.
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.7
+        """
 
         buff = self.get_attribute("EnclosingMethod")
 
@@ -835,7 +888,8 @@ class JavaClassInfo(object):
             if t in (CONST_Class, CONST_Fieldref,
                      CONST_Methodref, CONST_InterfaceMethodref):
 
-                pv = cpool.pretty_deref_const(i)
+                # convert this away from unicode so we can
+                pv = str(cpool.pretty_deref_const(i))
 
                 if pv[0] == "[":
                     # sometimes when calling operations on an array
@@ -905,6 +959,7 @@ class JavaMemberInfo(object):
         self.descriptor_ref = 0
         self.is_method = is_method
         self.annotations = None
+        self.invisible_annotations = None
 
 
 
@@ -1099,7 +1154,10 @@ class JavaMemberInfo(object):
 
     def is_synthetic(self):
 
-        """ is this a synthetic method """
+        """ is this a synthetic method
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.8
+        """
 
         return ((self.access_flags & ACC_SYNTHETIC) or
                 bool(self.get_attribute("Synthetic")))
@@ -1124,21 +1182,21 @@ class JavaMemberInfo(object):
 
     def is_deprecated(self):
 
-        """ is this member deprecated """
+        """ is this member deprecated
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se5.0/html/ClassFile.doc.html#78232
+        """
 
         return bool(self.get_attribute("Deprecated"))
 
 
 
-    def get_annotations(self):
+    def _get_annotations(self, python_attr_name, java_attr_name):
 
-        """ The RuntimeVisibleAnnotations attribute. A tuple of
-        JavaAnnotaion instances """
-
-        annos = self.annotations
+        annos = getattr(self, python_attr_name)
 
         if annos is None:
-            buff = self.get_attribute("RuntimeVisibleAnnotations")
+            buff = self.get_attribute(java_attr_name)
             if buff is None:
                 annos = tuple()
 
@@ -1147,16 +1205,43 @@ class JavaMemberInfo(object):
                     annos = up.unpack_objects(JavaAnnotation, self.cpool)
                     annos = tuple(annos)
 
-            self.annotations = annos
+            setattr(self, python_attr_name, annos)
 
         return annos
+
+
+
+    def get_annotations(self):
+
+        """ The RuntimeVisibleAnnotations attribute. A tuple of
+        JavaAnnotation instances
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.16
+        """
+
+        return self._get_annotations("annotations", "RuntimeVisibleAnnotations")
+
+
+
+    def get_invisible_annotations(self):
+
+        """ The RuntimeInvisibleAnnotations attribute. A tuple of
+        JavaAnnotation instances
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.17
+        """
+
+        return self._get_annotations("invisible_annotations", "RuntimeInvisibleAnnotations")
 
 
 
     def get_annotationdefault(self):
 
         """ The AnnotationDefault attribute, only present upon fields
-        in an annotaion.  """
+        in an annotaion.
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.20
+        """
 
         buff = self.get_attribute("AnnotationDefault")
         if buff is None:
@@ -1184,7 +1269,10 @@ class JavaMemberInfo(object):
     def get_code(self):
 
         """ the JavaCodeInfo of this member if it is a non-abstract
-        method, None otherwise """
+        method, None otherwise
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.3
+        """
 
         buff = self.get_attribute("Code")
         if buff is None:
@@ -1201,7 +1289,10 @@ class JavaMemberInfo(object):
     def get_exceptions(self):
 
         """ a tuple of class names for the exception types this method
-        may raise, or None if this is not a method"""
+        may raise, or None if this is not a method
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.5
+        """
 
         buff = self.get_attribute("Exceptions")
         if buff is None:
@@ -1216,7 +1307,10 @@ class JavaMemberInfo(object):
     def get_constantvalue(self):
 
         """ the constant pool index for this field, or None if this is
-        not a contant field"""
+        not a contant field
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.2
+        """
 
         buff = self.get_attribute("ConstantValue")
         if buff is None:
@@ -1413,7 +1507,10 @@ class JavaMemberInfo(object):
 
 class JavaCodeInfo(object):
 
-    """ The 'Code' attribue of a method member of a java class """
+    """ The 'Code' attribue of a method member of a java class
+
+    reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.3
+    """
 
 
     def __init__(self, cpool):
@@ -1469,7 +1566,10 @@ class JavaCodeInfo(object):
 
     def get_linenumbertable(self):
 
-        """ a sequence of (code_offset, line_number) pairs """
+        """ a sequence of (code_offset, line_number) pairs.
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.12
+        """
 
         lnt = self._lnt
         if lnt is None:
@@ -1502,7 +1602,10 @@ class JavaCodeInfo(object):
     def get_localvariabletable(self):
 
         """ a sequence of (code_offset, length, name_index,
-        desc_index, index) tuples """
+        desc_index, index) tuples
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.13
+        """
 
         buff = self.get_attribute("LocalVariableTable")
         if buff is None:
@@ -1516,7 +1619,10 @@ class JavaCodeInfo(object):
     def get_localvariabletypetable(self):
 
         """ a sequence of (code_offset, length, name_index,
-        signature_index, index) tuples """
+        signature_index, index) tuples
+
+        reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.14
+        """
 
         buff = self.get_attribute("LocalVariableTypeTable")
         if buff is None:
@@ -1669,7 +1775,10 @@ class JavaExceptionInfo(object):
 
 class JavaInnerClassInfo(object):
 
-    """ Information about an inner class """
+    """ Information about an inner class
+
+    reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.6
+    """
 
     def __init__(self, cpool):
         self.cpool = cpool
@@ -1702,7 +1811,10 @@ class JavaInnerClassInfo(object):
 
 class JavaAnnotation(dict):
 
-    """ Java Annotations info """
+    """ Java Annotations info
+
+    reference: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.7.16
+    """
 
 
     def __init__(self, cpool):
@@ -1772,7 +1884,7 @@ class JavaAnnotation(dict):
 
 def _annotation_val_eq(left_tag, left_data, left_cpool,
                        right_tag, right_data, right_cpool):
-    
+
     if left_tag != right_tag:
         return False
 
@@ -1838,7 +1950,7 @@ def _unpack_annotation_val(unpacker, cpool):
 
 
 def _pretty_annotation_val(val, cpool):
-    
+
     """ a pretty display of a tag and data pair annotation value """
 
     tag, data = val
@@ -1931,13 +2043,16 @@ def _unpack_const_item(unpacker):
     elif typecode == CONST_Double:
         (val,) = unpacker.unpack(">d")
 
-    elif typecode in (CONST_Class, CONST_String):
+    elif typecode in (CONST_Class, CONST_String, CONST_MethodType):
         (val,) = unpacker.unpack_struct(_H)
 
     elif typecode in (CONST_Fieldref, CONST_Methodref,
                       CONST_InterfaceMethodref, CONST_NameAndType,
-                      CONST_ModuleIdInfo):
+                      CONST_ModuleId, CONST_InvokeDynamic):
         val = unpacker.unpack_struct(_HH)
+
+    elif typecode == CONST_MethodHandle:
+        val = unpacker.unpack(">BH")
 
     else:
         raise Unimplemented("unknown constant type %r" % type)
@@ -1986,8 +2101,8 @@ def _pretty_const_type_val(typecode, val):
     elif typecode == CONST_NameAndType:
         typestr = "NameAndType"
         val = "#%i:#%i" % val
-    elif typecode == CONST_ModuleIdInfo:
-        typestr = "ModuleIdInfo"
+    elif typecode == CONST_ModuleId:
+        typestr = "ModuleId"
         val = "#%i@#%i" % val
     else:
         raise Unimplemented("unknown type, %r", typecode)
@@ -2038,7 +2153,7 @@ def _next_argsig(buff):
         result = (s[:i], buffer(buff, i))
 
     else:
-        raise Unimplemented("_next_argsig is %r in %s" % (c, buff))
+        raise Unimplemented("_next_argsig is %r in %r" % (c, str(buff)))
 
     return result
 
@@ -2172,7 +2287,7 @@ def is_class_file(filename):
     it and checking for the magic header """
 
     with open(filename, "rb") as fd:
-        c = is_class(fd.read(4))
+        c = fd.read(4)
 
     return c == JAVA_CLASS_MAGIC_STR
 

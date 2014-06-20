@@ -230,8 +230,10 @@ class pylint_cmd(Command):
         linter = PyLinter(pylintrc=self.lint_config)
 
         # same, but not all pylint versions have load_default_plugins
-        #linter.load_default_plugins()
-        checkers.initialize(linter)
+        if hasattr(linter, 'load_default_plugins'):
+            linter.load_default_plugins()
+        else:
+            checkers.initialize(linter)
 
         linter.read_config_file()
         linter.load_config_file()
@@ -278,7 +280,7 @@ class pylint_cmd(Command):
 
 
 setup(name = "javatools",
-      version = "1.3",
+      version = "1.4.0",
 
       packages = ["javatools",
                   "javatools.cheetah"],
@@ -315,7 +317,6 @@ setup(name = "javatools",
                      "Environment :: Console",
                      "Intended Audience :: Developers",
                      "Intended Audience :: Information Technology",
-                     "Natural Language :: English",
                      "Programming Language :: Python :: 2",
                      "Topic :: Software Development :: Disassemblers"],
 
