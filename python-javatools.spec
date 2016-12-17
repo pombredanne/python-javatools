@@ -15,10 +15,11 @@ BuildArch: noarch
 
 Requires: python2 >= 2.6
 Requires: python-cheetah
-Requires: PyXML
+Requires: M2Crypto
 
 BuildRequires: python2-devel
 BuildRequires: python-cheetah
+BuildRequires: python-setuptools
 BuildRequires: coreutils
 
 
@@ -46,7 +47,7 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%doc ChangeLog LICENSE README.md TODO
+%doc AUTHORS ChangeLog LICENSE README.md TODO
 %{python2_sitelib}/*
 %{_bindir}/*
 
@@ -56,6 +57,7 @@ rm -rf %{buildroot}
 * Thu Jan 21 2014 Christopher O'Brien <obriencj@gmail.com> - 1.4.0-0
 - bump to 1.4.0
 - added ChangeLog as its own file
+- move to setuptools
 
 * Thu May 23 2013 Christopher O'Brien <obriencj@gmail.com> - 1.3-1
 - bump to 1.3
